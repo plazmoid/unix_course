@@ -30,8 +30,13 @@ function show_header() {
 }
     
 function draw_field() {
+    echo -n '*'
     for ((i=0; i<$FLD_SIZE; i++)) do
-        echo -n '|'
+        echo -n " $i"
+    done
+    echo
+    for ((i=0; i<$FLD_SIZE; i++)) do
+        echo -n "$i|"
         for ((j=0; j<$FLD_SIZE; j++)) do
             echo -n "${field[$i,$j]}"
             if [[ $j -eq $((FLD_SIZE-1)) ]]; then
