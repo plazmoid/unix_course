@@ -49,28 +49,30 @@ function check_win() {
     diag1_last=${field[0,0]}
     diag2_last=${field[$((FLD_SIZE-1)),0]}
     for ((i=0; i<$FLD_SIZE; i++)) do
-        col_last=${field[i,0]}
-        row_last=${field[0,i]}
+        row_last=${field[$i,0]}
+        col_last=${field[0,$i]}
         for ((j=0; j<$FLD_SIZE; j++)) do
-            if [[ ${field[i,j]} != $col_last ]]; then
-                col_last=false
-            fi
-            if [[ ${field[j,i]} != $row_last ]]; then
+            if [[ ${field[$i,$j]} != $row_last ]]; then
                 row_last=false
             fi
+            if [[ ${field[$j,$i]} != $col_last ]]; then
+                col_last=false
+            fi
         done
-        if [[ ${field[i,i]} != $diag1_last ]]; then
+        if [[ ${field[$i,$i]} != $diag1_last ]]; then
             diag1_last=false;
         fi
-        if [[ ${field[$((FLD_SIZE-i-1)),i]} != $diag2_last ]]; then
+        if [[ ${field[$((FLD_SIZE-i-1)),$i]} != $diag2_last ]]; then
             diag2_last=false;
         fi
+        [[ $col_last != false && $col_last != "$PLACEHOLDER" ]] || \
+        [[ $row_last != false && $row_last != "$PLACEHOLDER" ]] && break
     done
     winarr=($col_last $row_last $diag1_last $diag2_last)
-    echo "col: $col_last"
-    echo "row: $row_last"
-    echo "d1: $diag1_last"
-    echo "d2: $diag2_last"
+#    echo "col: $col_last"
+#    echo "row: $row_last"
+#    echo "d1: $diag1_last"
+#    echo "d2: $diag2_last"
     for winner in ${winarr[*]}; do
         if [[ $winner != false && $winner != $PLACEHOLDER ]]; then
             echo $winner
@@ -88,8 +90,8 @@ else
 fi
 
 clear
-echo "You're playing as $SYMB"
-echo "Enter coordinates to put your $SYMB like this: x y"
+echo "Your symbol is: $SYMB"
+echo "Enter coordinates in this way: x y"
 echo $INPUT_CONSTRAINT_MSG
 
 declare x y
@@ -100,7 +102,7 @@ while true; do
         echo "$winner wins!"
         break;
     fi
-    echo $winner
+    echo -n '> '
     read y x
     clear
     set_symbol $x $y
