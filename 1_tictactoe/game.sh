@@ -1,7 +1,7 @@
 #!/bin/sh
 
 FIFO=/tmp/ttt
-trap "rm $FIFO; exit" SIGTERM SIGKILL SIGINT
+trap "cleanup" SIGTERM SIGKILL SIGINT
 
 declare -A field # declare as assoc array
 FLD_SIZE=3
@@ -13,6 +13,21 @@ for ((i=0; i<$FLD_SIZE; i++)) do
         field[$i,$j]="$PLACEHOLDER"
     done
 done
+
+function cleanup() {
+    rm $FIFO 2>/dev/null
+    exit
+}
+
+function show_header() {
+    echo "Your symbol is: $SYMB"
+    echo "Enter coordinates in this way: x y"
+    echo "$INPUT_CONSTRAINT_MSG"
+    echo
+    echo "Status: $STATUS"
+    [[ $ERR_MSG ]] && echo $ERR_MSG
+    echo
+}
     
 function draw_field() {
     for ((i=0; i<$FLD_SIZE; i++)) do
@@ -32,14 +47,14 @@ function set_symbol() {
     if [[ $1 -lt "$FLD_SIZE" ]] && [[ $1 -gt -1 ]] && \
        [[ $2 -lt "$FLD_SIZE" ]] && [[ $2 -gt -1 ]]; then
         if [[ ${field[$1,$2]} == "$PLACEHOLDER" ]]; then
-            field[$1,$2]=$SYMB
+            field[$1,$2]=$3
             return 0
         else
-            echo "Please choose an empty cell"
+            ERR_MSG="Please choose an empty cell"
             return 1
         fi
     else
-        echo $INPUT_CONSTRAINT_MSG
+        ERR_MSG="Please enter valid coords" 
         return 1
     fi
 }
@@ -69,46 +84,65 @@ function check_win() {
         [[ $row_last != false && $row_last != "$PLACEHOLDER" ]] && break
     done
     winarr=($col_last $row_last $diag1_last $diag2_last)
-#    echo "col: $col_last"
-#    echo "row: $row_last"
-#    echo "d1: $diag1_last"
-#    echo "d2: $diag2_last"
     for winner in ${winarr[*]}; do
         if [[ $winner != false && $winner != $PLACEHOLDER ]]; then
-            echo $winner
-            return 0
+            set_status "$winner won!"
+            cleanup
         fi
     done
+    if [[ ! "${field[@]}" =~ "_" ]]; then
+        set_status "Draw!"
+        cleanup
+    fi
     return -1
+}
+
+function redraw_all() {
+    clear
+    show_header
+    draw_field
+    unset ERR_MSG
+}
+
+function set_status() {
+    STATUS=$1
+    redraw_all
 }
 
 if [[ ! -p "$FIFO" ]]; then
     SYMB='X'
+    OPP_SYMB='0'
     mknod $FIFO p
+    SWITCH=true
 else
     SYMB='0'
+    OPP_SYMB='X'
+    SWITCH=false
 fi
 
-clear
-echo "Your symbol is: $SYMB"
-echo "Enter coordinates in this way: x y"
-echo $INPUT_CONSTRAINT_MSG
 
 declare x y
 while true; do
-    draw_field
-    winner=$(check_win)
-    if [[ $winner != "" && $? -eq 0 ]]; then
-        echo "$winner wins!"
-        break;
+    check_win
+    if [[ $SWITCH == false ]]; then
+        set_status "Waiting for opponent's turn"
+        read y x < $FIFO
+        set_symbol $x $y $OPP_SYMB
+        [[ $SWITCH ]] && SWITCH=false || SWITCH=true
     fi
-    echo -n '> '
-    read y x
-    clear
-    set_symbol $x $y
-    #if [[ $? -eq 0 ]]; then
-    #    echo yos
-    #fi
+    set_status 'Your turn'
+    check_win
+    while true; do
+        echo -n '> '
+        read y x
+        set_symbol $x $y $SYMB
+        [[ $? -eq 0 ]] && break || redraw_all
+    done
+    if [[ $SWITCH ]]; then
+        set_status "Waiting for connection"
+        echo $y $x > $FIFO
+        [[ $SWITCH ]] && SWITCH=false || SWITCH=true
+    fi
 done
 
-rm $FIFO
+cleanup
