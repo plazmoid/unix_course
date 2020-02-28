@@ -6,8 +6,10 @@ trap "cleanup" SIGTERM SIGKILL SIGINT
 declare -A field # declare as assoc array
 FLD_SIZE=3
 INPUT_CONSTRAINT_MSG="You may enter from 0 to $((FLD_SIZE-1))"
+#this symbol will mark empty cells
 PLACEHOLDER='_'
 
+#so lets fill field with it
 for ((i=0; i<$FLD_SIZE; i++)) do
     for ((j=0; j<$FLD_SIZE; j++)) do
         field[$i,$j]="$PLACEHOLDER"
@@ -65,6 +67,11 @@ function set_symbol() {
 }
 
 function check_win() {
+    #vars down below store last checked symbol in row/col/diag
+    #all directions are checked at the same time
+    #if next symbol in direction is different from
+    #stored (except $PLACEHOLDER), that direction become false,
+    #so it can't be winnable anymore
     declare col_last row_last diag1_last diag2_last
     diag1_last=${field[0,0]}
     diag2_last=${field[$((FLD_SIZE-1)),0]}
@@ -95,7 +102,8 @@ function check_win() {
             cleanup
         fi
     done
-    if [[ ! "${field[@]}" =~ "_" ]]; then
+    #if field contains no placeholders, but has no winners, it's a draw
+    if [[ ! "${field[@]}" =~ "$PLACEHOLDER" ]]; then
         set_status "Draw!"
         cleanup
     fi
@@ -116,7 +124,7 @@ function set_status() {
 
 if [[ ! -p "$FIFO" ]]; then
     SYMB='X'
-    OPP_SYMB='0'
+    OPP_SYMB='0' #opposite
     mknod $FIFO p
     SWITCH=true
 else
@@ -133,7 +141,7 @@ while true; do
         set_status "Waiting for opponent's turn"
         read y x < $FIFO
         set_symbol $x $y $OPP_SYMB
-        [[ $SWITCH ]] && SWITCH=false || SWITCH=true
+        SWITCH=true
     fi
     set_status 'Your turn'
     check_win
@@ -146,7 +154,7 @@ while true; do
     if [[ $SWITCH ]]; then
         set_status "Waiting for connection"
         echo $y $x > $FIFO
-        [[ $SWITCH ]] && SWITCH=false || SWITCH=true
+        SWITCH=false
     fi
 done
 
