@@ -125,6 +125,7 @@ function set_status() {
 if [[ ! -p "$FIFO" ]]; then
     SYMB='X'
     OPP_SYMB='0' #opposite
+    rm $FIFO 2>/dev/null
     mknod $FIFO p
     SWITCH=true
 else
