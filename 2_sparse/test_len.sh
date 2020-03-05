@@ -21,7 +21,7 @@ if [[ ! -f $TLOG ]]; then
     rm $ZFILE $ZO $LOG $TLOG 2>/dev/null
     exit 0
 else
-    sort $TLOG | uniq > $LOG
+    sort -n $TLOG | uniq > $LOG
     rm $TLOG
     wl=$(cat $LOG | wc -l)
     echo "$wl lengths was different from $ZSIZE, see $LOG"
