@@ -6,7 +6,9 @@
 #include <string.h>
 
 #define BUF_SIZE 1000
+#define TRUNC_ERR "Truncation error"
 
+//TODO: bugs with large files, variable length of result file
 char* slice(const char* arr, int from, int to) {
 	if(from > BUF_SIZE || to > BUF_SIZE || to < from) {
 		printf("Index error: [%d; %d]\n", from, to);
@@ -25,14 +27,17 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 	
-	int fd, nbytes, wr;
+	int fd, nbytes;
 	bool zstart = false;
-	unsigned long nonzr_pos = 0, zr_pos = 0, write_len = 0;
+	unsigned long nonzr_pos = 0,
+				  zr_pos = 0, 
+				  write_len = 0, 
+				  pos;
 	char chunk[BUF_SIZE];
 	char* filename = argv[1];
 	char* write_buf;
 
-	fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+	fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0660);
 	if (fd == -1) {
 		printf("Can't create new file\n");
 		return -1;
@@ -82,7 +87,13 @@ int main(int argc, char** argv) {
 			free(write_buf);
 		} else {
 			write_len = nbytes - zr_pos;
+			pos = lseek(fd, 0, SEEK_CUR);
+			if(ftruncate(fd, pos + write_len) == -1) {
+				printf(TRUNC_ERR);
+				return -1;
+			}
 			lseek(fd, write_len, SEEK_CUR);
+			//printf("trunc to %d bytes\n", pos + write_len);
 		}
 		if(nbytes < BUF_SIZE - 1) {
 			break;
