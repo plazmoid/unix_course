@@ -88,8 +88,8 @@ int main(int argc, char** argv) {
 			}
 			lseek(fd, write_len, SEEK_CUR);
 		}
-		// if read less bytes than BUF_SIZE-1, it means we read the last chunk, break
-		if(nbytes < BUF_SIZE - 1) {
+		// if read less bytes than BUF_SIZE, it means we read the last chunk, break
+		if(nbytes < BUF_SIZE) {
 			break;
 		}
 	}

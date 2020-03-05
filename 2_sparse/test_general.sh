@@ -18,7 +18,7 @@ diff $GZ_SRC $GZ_RES
 if [[ $? -eq 0 ]]; then
     if [[ $(stat -c %b $GZ_RES) -lt $(stat -c %b $GZ_SRC) ]]; then
         echo 'All ok!'
-        rm $GZ_SRC.gz $GZ_RES $GZ_SRC 2>/dev/null
+        rm $GZ_SRC.gz $GZ_RES $GZ_SRC $Z1 2>/dev/null
         exit 0
     else
         echo "Block sizes of source and result file are equal (result file is not sparse)"
