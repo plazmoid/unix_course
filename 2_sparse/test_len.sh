@@ -4,6 +4,7 @@ LOG=./wrong.log
 TLOG=/tmp/l
 # truncate -s 1M z
 ZFILE=./z
+# out
 ZO=./zz
 ZSIZE=$(stat -c %s $ZFILE)
 rm $LOG $TLOG 2>/dev/null

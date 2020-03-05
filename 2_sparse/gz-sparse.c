@@ -1,12 +1,4 @@
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
-#define BUF_SIZE 1000
-#define TRUNC_ERR "Truncation error"
+#include "gz-sparse.h"
 
 //TODO: bugs with large files, variable length of result file
 char* slice(const char* arr, int from, int to) {
@@ -16,7 +8,11 @@ char* slice(const char* arr, int from, int to) {
 	}
 
 	int res_size = (to - from) * sizeof(char) + 1;
-	char* res = (char*)malloc(res_size);
+	char* res;
+	if ((res = (char*)malloc(res_size)) == NULL) {
+		printf(MALL_ERR);
+		exit(-1);
+	}
 	strncpy(res, arr+from, res_size);
 	return res;
 }
@@ -39,7 +35,7 @@ int main(int argc, char** argv) {
 
 	fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0660);
 	if (fd == -1) {
-		printf("Can't create new file\n");
+		printf(FILE_CR_ERR);
 		return -1;
 	}
 	while (1) {
