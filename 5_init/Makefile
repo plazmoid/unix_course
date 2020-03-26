@@ -1,2 +1,2 @@
 all:
-	gcc init2.c -o init2 -Wall
+	gcc errors.c init2.c -o init2 -Wall
