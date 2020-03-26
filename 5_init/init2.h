@@ -1,11 +1,14 @@
+#include <stdbool.h>
 #define LOG_IDENT "init2"
 #define CFG_NAME "init2.cfg"
 #define CFG_DELIM "\n"
-#define _DEBUG
+//#define _DEBUG
 
 typedef struct {
+    unsigned argc;
     char **cmd;
     char *action;
+    bool finished;
 } entry_t;
 
 typedef struct {

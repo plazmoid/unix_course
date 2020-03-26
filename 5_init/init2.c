@@ -8,78 +8,16 @@
 #include <sys/param.h>
 #include <sys/resource.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
-#include <wordexp.h>
 #include "init2.h"
 #include "errors.h"
+#include "utils.h"
+#include "configs.h"
 
-
-entry_t parse_config_line(const char *line) {
-    entry_t entry;
-    wordexp_t result;
-    if(wordexp(line, &result, 0) != 0) {
-        err(ERRLNFMT, line, true);
-    }
-    entry.action = strdup(result.we_wordv[result.we_wordc-1]);
-    result.we_wordv[result.we_wordc-1] = "";
-    entry.cmd = result.we_wordv;
-    return entry;
-}
-
-void read_cfg(char *path, entries_t* parsed_entries) {
-    entry_t entry;
-    char *cfg_raw, *tok_ptr;
-    int cfg_lines_count = 0;
-    long fsize;
-    FILE *f;
-
-    f = fopen(CFG_NAME, "r");
-    if(f == NULL) {
-        err(NULL, CFG_NAME, true);
-    }
-    fseek(f, 0, SEEK_END);
-    fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    cfg_raw = malloc(fsize+1);
-    if(cfg_raw == NULL) {
-        err(NULL, NULL, true);
-    }
-    fread(cfg_raw, 1, fsize, f);
-    fclose(f);
-    cfg_raw[fsize] = '\0';
-
-    for(int i = 0; cfg_raw[i]; i++) {
-        cfg_lines_count += (cfg_raw[i] == *(char*)CFG_DELIM);
-    }
-    #ifdef _DEBUG
-    printf("entries found: %d\n", cfg_lines_count);
-    #endif
-    //TODO: check empty lines
-    parsed_entries->ev = malloc(sizeof(entry_t) * cfg_lines_count);
-    if(parsed_entries->ev == NULL) {
-        err(NULL, NULL, true);
-    }
-
-    tok_ptr = strtok(cfg_raw, CFG_DELIM);
-    if(tok_ptr == NULL) {
-        err(ERRFMT, NULL, true);
-    }
-    while(tok_ptr != NULL) {
-        #ifdef _DEBUG
-        printf("Entry #%d: %s\n", parsed_entries->ec, tok_ptr);
-        #endif
-        if(strlen(tok_ptr) > 0) {
-            entry = parse_config_line(tok_ptr);
-            unsigned *cnt = &parsed_entries->ec;
-            parsed_entries->ev[*cnt] = entry;
-            *cnt += 1;
-        }
-        tok_ptr = strtok(NULL, CFG_DELIM);
-    }
-    free(cfg_raw);
-}
 
 void daemonize() {
+    int pid;
     struct rlimit lim;
     //signals below are already ignored
     //if we're called by real init
@@ -93,7 +31,11 @@ void daemonize() {
     //when killing parent
     setsid();
     //exit current process to release terminal
-    if(fork() != 0) {
+    pid = fork();
+    if(pid == -1) {
+        err(NULL, NULL, true);
+    }
+    if(pid != 0) {
         exit(0);
     }
     //close all fildes
@@ -104,33 +46,70 @@ void daemonize() {
     chdir("/");
 }
 
+void run_tasks(entries_t *tasklist) {
+    int pid, pid_cnt = 0, status;
+    int pids[tasklist->ec];
+    char **argv, *action, *msg;
+    syslog(LOG_INFO, "Running tasks");
+    for(int i = 0; i < tasklist->ec; i++) {
+        entry_t task = tasklist->ev[i];
+        if(task.finished) {
+            continue;
+        }
+        pid = fork();
+        if(pid == -1) {
+            err(NULL, NULL, true);
+        } else if(pid == 0) {
+            argv = task.cmd;
+            msg = join_str(argv, " ", task.argc);
+            syslog(LOG_INFO, "Running %s", msg);
+            free(msg);
+            execv(argv[0], argv);
+            err(NULL, argv[0], true);
+        } else {
+            pids[pid_cnt] = pid;
+            pid_cnt++;
+            if(waitpid(pid, &status, 0) == -1) {
+                char errmsg[512];
+                msg = join_str(argv, " ", task.argc);
+                sprintf(errmsg, "%s (%d)", msg, pid);
+                err(NULL, errmsg, false);
+                free(msg);
+            }
+            action = task.action;
+            if(!strcmp(action, "wait")) {
+                task.finished = true;
+            } else if(!strcmp(action, "respawn")) {
+
+            }
+        }
+    }
+}
+
 int main() {
-    entries_t entries = {
+    entries_t tasks = {
         .ec = 0,
         .ev = NULL
     };
-    read_cfg(CFG_NAME, &entries);
-    /*daemonize();
     openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
-    syslog(LOG_INFO, "Started lolling");
-    sleep(1);
-    syslog(LOG_INFO, "Lolling");
-    sleep(1);
-    syslog(LOG_INFO, "Lolling");
-    sleep(1);
-    syslog(LOG_INFO, "End lolling");
-    closelog();*/
-    for(int i = 0; i < entries.ec; i++) {
-        #ifdef _DEBUG
-        printf("***** \ncmd: ");
-        for(int j = 0; entries.ev[i].cmd[j]; j++) {
-            printf("%s ", entries.ev[i].cmd[j]);
+    syslog(LOG_INFO, "Starting");
+    read_cfg(CFG_NAME, &tasks);
+    daemonize();
+    run_tasks(&tasks);
+    for(int i = 0; i < tasks.ec; i++) {
+        /*#ifdef _DEBUG
+        syslog(LOG_DEBUG, "***** \ncmd: ");
+        for(int j = 0; tasks.ev[i].cmd[j]; j++) {
+            syslog(LOG_DEBUG, "%s ", tasks.ev[i].cmd[j]);
         }
-        printf("\naction: %s\n", entries.ev[i].action);
-        #endif
+        syslog(LOG_DEBUG, "\naction: %s\n", tasks.ev[i].action);
+        #endif*/
 
-        free(entries.ev[i].cmd);
+        free(tasks.ev[i].cmd);
     }
-    free(entries.ev);
+
+    syslog(LOG_INFO, "Exiting");
+    closelog();
+    free(tasks.ev);
     return 0;
 }

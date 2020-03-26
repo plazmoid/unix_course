@@ -1,0 +1,1 @@
+char* join_str(char* strings[], char* seperator, int count);
