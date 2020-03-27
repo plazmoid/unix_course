@@ -6,10 +6,14 @@
 #include <stdbool.h>
 #include "errors.h"
 #include "init2.h"
+#include "utils.h"
 
 int parse_config_line(const char *line, entry_t *entry) {
     wordexp_t result;
     int wres;
+    if(line[0] == '#') {
+        return -1;
+    }
     wres = wordexp(line, &result, 0);
     if(wres != 0) {
         char *errmsg;
@@ -31,8 +35,8 @@ int parse_config_line(const char *line, entry_t *entry) {
     entry->fails = 0;
     entry->action = strdup(result.we_wordv[entry->argc]);
     result.we_wordv[entry->argc] = (char*)0;
-    //TODO: /bin/ls -> ls
     entry->cmd = result.we_wordv;
+    entry->full_cmd = join_str(entry->cmd, " ", entry->argc);
     entry->finished = false;
     if(*entry->cmd == (char*)0) {
         err(ERRLNFMT, line, true);
@@ -46,16 +50,16 @@ int parse_config_line(const char *line, entry_t *entry) {
     return 0;
 }
 
-void read_cfg(char *path, entries_t* parsed_entries) {
+void read_cfg(char *cfg_path, entries_t* parsed_entries) {
     char *cfg_raw, *tok_ptr;
     int cfg_lines_count = 0;
     long fsize;
     FILE *f;
 
     syslog(LOG_INFO, "Parsing config");
-    f = fopen(CFG_NAME, "r");
+    f = fopen(cfg_path, "r");
     if(f == NULL) {
-        err(NULL, CFG_NAME, true);
+        err(NULL, cfg_path, true);
     }
     fseek(f, 0, SEEK_END);
     fsize = ftell(f);

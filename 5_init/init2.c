@@ -12,22 +12,36 @@
 #include <unistd.h>
 #include "init2.h"
 #include "errors.h"
-#include "utils.h"
 #include "configs.h"
 
-/*static entries_t tasks = {
+static entries_t tasks = {
     .ec = 0,
     .ev = NULL
 };
 
-void sighup(int sig) {
-    if(tasks.ev != NULL) {
+static char cfg_path[PATH_MAX];
 
+
+void sighup_handler(int sig) {
+    entry_t *task;
+    if(tasks.ev != NULL) {
+        syslog(LOG_WARNING, "SIGHUP received, reloading all tasks");
+        for(int i = 0; i < tasks.ec; i++) {
+            task = &tasks.ev[i];
+            if(kill(task->pid, SIGTERM) == -1) {
+                err(NULL, task->full_cmd, false);
+            }
+            task->finished = true;
+        }
+        cleanup();
+        read_cfg(cfg_path, &tasks);
+        syslog(LOG_INFO, "Tasks reloaded");
+        run_tasks(&tasks);
     }
-}*/
+}
 
 void daemonize() {
-    int pid;
+    pid_t pid;
     struct rlimit lim;
     //signals below are already ignored
     //if we're called by real init
@@ -40,11 +54,11 @@ void daemonize() {
     //to prevent child killing
     //when killing parent
     setsid();
-    //exit current process to release terminal
     pid = fork();
     if(pid == -1) {
         err(NULL, NULL, true);
     }
+    //exit current process to release terminal
     if(pid != 0) {
         exit(0);
     }
@@ -57,73 +71,91 @@ void daemonize() {
 }
 
 void run_tasks(entries_t *tasklist) {
-    int pid, pid_cnt = 0, status;
+    entry_t *task;
+    pid_t pid;
+    int status;
     bool any_runnable = true;
-    char **argv, *action, *full_cmd;
     syslog(LOG_INFO, "Running tasks");
     while(any_runnable) {
         any_runnable = false;
         for(int i = 0; i < tasklist->ec; i++) {
-            entry_t *task = &tasklist->ev[i];
+            task = &tasklist->ev[i];
             if(task->finished) {
                 continue;
             }
             any_runnable = true;
-            argv = task->cmd;
-            full_cmd = join_str(argv, " ", task->argc);
             pid = fork();
             if(pid == -1) {
                 err(NULL, NULL, true);
             } else if(pid == 0) {
-                execv(argv[0], argv);
-                err(NULL, full_cmd, true);
+                execv(task->cmd[0], task->cmd);
+                exit(-1);
             } else {
                 task->pid = pid;
-                syslog(LOG_INFO, "Running %s (%d)", full_cmd, pid);
-                //TODO: wait in other cycle
-                if(waitpid(pid, &status, 0) == -1) {
-                    char errmsg[512];
-                    sprintf(errmsg, "%s (%d)", full_cmd, pid);
-                    err(NULL, errmsg, false);
-                }
-                action = task->action;
-                syslog(LOG_INFO, "%d returned %d", pid, status);
-                if(!strcmp(action, "wait")) {
-                    task->finished = true;
-                } else if(!strcmp(action, "respawn")) {
+                #ifdef _DEBUG
+                syslog(LOG_DEBUG, "Running %s (%d)", task->full_cmd, pid);
+                #endif
+            }
+        }
 
+        for(int i = 0; i < tasklist->ec; i++) {
+            task = &tasklist->ev[i];
+            if(task->finished) {
+                continue;
+            }
+            if(waitpid(task->pid, &status, 0) == -1) {
+                char errmsg[64];
+                sprintf(errmsg, "%d", task->pid);
+                err(NULL, errmsg, false);
+            }
+            #ifdef _DEBUG
+            syslog(LOG_DEBUG, "%d (%s) returned %d", 
+                    task->pid, task->full_cmd, status);
+            #endif
+            if(status == 0) {
+                if(!strcmp(task->action, "wait")) {
+                    task->finished = true;        
+                } else if(!strcmp(task->action, "respawn")) {
+                    if(task->fails > 0) {
+                        task->fails = 0;
+                    }
+                }
+            } else {
+                if(task->fails < FAILS_LIMIT) {
+                    task->fails++;
+                } else {
+                    char errmsg[512];
+                    sprintf(errmsg, ERRNONZR, status);
+                    err(errmsg, task->full_cmd, false);
+                    task->finished = true;
                 }
             }
-            free(full_cmd);
         }
     }
 }
 
+void cleanup() {
+    entry_t *task;
+    for(int i = 0; i < tasks.ec; i++) {
+        task = &tasks.ev[i]; 
+        free(task->cmd);
+        free(task->full_cmd);
+    }
+    free(tasks.ev);    
+}
+
 int main() {
-    //signal(SIGHUP, sighup);
-    entries_t tasks = {
-        .ec = 0,
-        .ev = NULL
-    };
+    getcwd(cfg_path, PATH_MAX);
+    strcat(cfg_path, "/");
+    strcat(cfg_path, CFG_NAME);
+    daemonize();
+    signal(SIGHUP, sighup_handler);
     openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     syslog(LOG_INFO, "Starting");
-    read_cfg(CFG_NAME, &tasks);
-    daemonize();
+    read_cfg(cfg_path, &tasks);
     run_tasks(&tasks);
-    for(int i = 0; i < tasks.ec; i++) {
-        /*#ifdef _DEBUG
-        syslog(LOG_DEBUG, "***** \ncmd: ");
-        for(int j = 0; tasks.ev[i].cmd[j]; j++) {
-            syslog(LOG_DEBUG, "%s ", tasks.ev[i].cmd[j]);
-        }
-        syslog(LOG_DEBUG, "\naction: %s\n", tasks.ev[i].action);
-        #endif*/
-
-        free(tasks.ev[i].cmd);
-    }
-
+    cleanup();
     syslog(LOG_INFO, "Exiting");
     closelog();
-    free(tasks.ev);
     return 0;
 }

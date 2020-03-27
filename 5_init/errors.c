@@ -11,9 +11,9 @@ void err(char *msg, const char *arg, bool critical) {
         msg = strerror(errno);
     }
     if (arg != NULL && strlen(arg) > 0) {
-        syslog(LOG_ERR, "Error: %s in '%s'\n", msg, arg);
+        syslog(LOG_ERR, "%s, '%s'\n", msg, arg);
     } else {
-        syslog(LOG_ERR, "Error: %s\n", msg);
+        syslog(LOG_ERR, "%s\n", msg);
     }
     if(critical) {
         exit(1);
