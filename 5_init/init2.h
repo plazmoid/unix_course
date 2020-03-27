@@ -6,6 +6,8 @@
 
 typedef struct {
     unsigned argc;
+    unsigned fails;
+    int pid;
     char **cmd;
     char *action;
     bool finished;

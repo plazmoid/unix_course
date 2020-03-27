@@ -25,10 +25,13 @@ int parse_config_line(const char *line, entry_t *entry) {
                 break;
         }
         err(errmsg, line, false);
+        return -1;
     }
     entry->argc = result.we_wordc-1;
+    entry->fails = 0;
     entry->action = strdup(result.we_wordv[entry->argc]);
     result.we_wordv[entry->argc] = (char*)0;
+    //TODO: /bin/ls -> ls
     entry->cmd = result.we_wordv;
     entry->finished = false;
     if(*entry->cmd == (char*)0) {

@@ -15,6 +15,16 @@
 #include "utils.h"
 #include "configs.h"
 
+/*static entries_t tasks = {
+    .ec = 0,
+    .ev = NULL
+};
+
+void sighup(int sig) {
+    if(tasks.ev != NULL) {
+
+    }
+}*/
 
 void daemonize() {
     int pid;
@@ -48,45 +58,49 @@ void daemonize() {
 
 void run_tasks(entries_t *tasklist) {
     int pid, pid_cnt = 0, status;
-    int pids[tasklist->ec];
-    char **argv, *action, *msg;
+    bool any_runnable = true;
+    char **argv, *action, *full_cmd;
     syslog(LOG_INFO, "Running tasks");
-    for(int i = 0; i < tasklist->ec; i++) {
-        entry_t task = tasklist->ev[i];
-        if(task.finished) {
-            continue;
-        }
-        pid = fork();
-        if(pid == -1) {
-            err(NULL, NULL, true);
-        } else if(pid == 0) {
-            argv = task.cmd;
-            msg = join_str(argv, " ", task.argc);
-            syslog(LOG_INFO, "Running %s", msg);
-            free(msg);
-            execv(argv[0], argv);
-            err(NULL, argv[0], true);
-        } else {
-            pids[pid_cnt] = pid;
-            pid_cnt++;
-            if(waitpid(pid, &status, 0) == -1) {
-                char errmsg[512];
-                msg = join_str(argv, " ", task.argc);
-                sprintf(errmsg, "%s (%d)", msg, pid);
-                err(NULL, errmsg, false);
-                free(msg);
+    while(any_runnable) {
+        any_runnable = false;
+        for(int i = 0; i < tasklist->ec; i++) {
+            entry_t *task = &tasklist->ev[i];
+            if(task->finished) {
+                continue;
             }
-            action = task.action;
-            if(!strcmp(action, "wait")) {
-                task.finished = true;
-            } else if(!strcmp(action, "respawn")) {
+            any_runnable = true;
+            argv = task->cmd;
+            full_cmd = join_str(argv, " ", task->argc);
+            pid = fork();
+            if(pid == -1) {
+                err(NULL, NULL, true);
+            } else if(pid == 0) {
+                execv(argv[0], argv);
+                err(NULL, full_cmd, true);
+            } else {
+                task->pid = pid;
+                syslog(LOG_INFO, "Running %s (%d)", full_cmd, pid);
+                //TODO: wait in other cycle
+                if(waitpid(pid, &status, 0) == -1) {
+                    char errmsg[512];
+                    sprintf(errmsg, "%s (%d)", full_cmd, pid);
+                    err(NULL, errmsg, false);
+                }
+                action = task->action;
+                syslog(LOG_INFO, "%d returned %d", pid, status);
+                if(!strcmp(action, "wait")) {
+                    task->finished = true;
+                } else if(!strcmp(action, "respawn")) {
 
+                }
             }
+            free(full_cmd);
         }
     }
 }
 
 int main() {
+    //signal(SIGHUP, sighup);
     entries_t tasks = {
         .ec = 0,
         .ev = NULL
