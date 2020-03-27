@@ -32,16 +32,18 @@ int parse_config_line(const char *line, entry_t *entry) {
         return -1;
     }
     entry->argc = result.we_wordc-1;
-    entry->fails = 0;
-    entry->action = strdup(result.we_wordv[entry->argc]);
-    result.we_wordv[entry->argc] = (char*)0;
-    entry->cmd = result.we_wordv;
-    entry->full_cmd = join_str(entry->cmd, " ", entry->argc);
-    entry->finished = false;
-    if(*entry->cmd == (char*)0) {
+    if(entry->argc < 1) {
         err(ERRLNFMT, line, true);
         return -1;
     }
+    entry->fails = 0;
+    entry->action = strdup(result.we_wordv[entry->argc]);
+    result.we_wordv[entry->argc] = (char*)0;
+    entry->argv = result.we_wordv;
+    entry->exec_name = strdup(entry->argv[0]);
+    entry->argv[0] = get_exec_from_abspath(entry->argv[0]);
+    entry->full_cmd = join_str(entry->argv, " ", entry->argc);
+    entry->finished = false;
     if(strcmp(entry->action, "wait") != 0 && 
        strcmp(entry->action, "respawn") != 0) {
         err(ERRACT, entry->action, false);
@@ -79,7 +81,7 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
     syslog(LOG_DEBUG, "newlines found: %d\n", cfg_lines_count+1);
     #endif
 
-    parsed_entries->ev = malloc(sizeof(entry_t) * cfg_lines_count);
+    parsed_entries->ev = calloc(cfg_lines_count, sizeof(entry_t));
     if(parsed_entries->ev == NULL) {
         err(NULL, NULL, true);
     }
@@ -90,13 +92,14 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
     }
     while(tok_ptr != NULL) {
         #ifdef _DEBUG
-        syslog(LOG_DEBUG, "Entry #%d: %s\n", parsed_entries->ec, tok_ptr);
+        syslog(LOG_DEBUG, "Raw entry #%d: %s\n", parsed_entries->ec, tok_ptr);
         #endif
         if(strlen(tok_ptr) > 0) {
             entry_t entry;
             if(!parse_config_line(tok_ptr, &entry)) {
                 unsigned *e_cnt = &parsed_entries->ec;
                 parsed_entries->ev[*e_cnt] = entry;
+                syslog(LOG_INFO, "Parsed entry: %s", tok_ptr);
                 *e_cnt += 1;
             }
         }

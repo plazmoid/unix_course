@@ -5,9 +5,9 @@
 #define ERRFMT "Wrong config format"
 #define ERRNONZR "Process exited with code %d too much times, giving up"
 #define ERRACT "Unknown action"
-
-//cmd args action
-#define ERRLNFMT "Wrong line format, see example in task 5"
+#define ERRLNFMT "Wrong line format, see example in config"
+#define ERRPIDWR "Error writing in pidfile"
+#define ERRPIDEXS "Pidfile already exists"
 
 #define FAILS_LIMIT 50
 
