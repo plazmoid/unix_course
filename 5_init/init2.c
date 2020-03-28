@@ -75,11 +75,11 @@ int manage_pidfile(const char* name, bool create) {
     char pidfile_path[512];
     sprintf(pidfile_path, "/tmp/%s.pid", name);
     if(!create) {
-        #ifdef _DEBUG
-        syslog(LOG_DEBUG, "Removing %s", pidfile_path);
-        #endif
-        if(unlink(pidfile_path) == -1) {
-            err(NULL, pidfile_path, false);
+        if(access(pidfile_path, F_OK) != -1 ) {
+            #ifdef _DEBUG
+            syslog(LOG_DEBUG, "Removing %s", pidfile_path);
+            #endif
+            unlink(pidfile_path);
         }
     } else {
         FILE *f;
@@ -173,9 +173,9 @@ void run_tasks(entries_t *tasklist) {
 
 void cleanup() {
     entry_t *task;
-    manage_pidfile(PIDFILE, false);
     for(int i = 0; i < tasks.ec; i++) {
         task = &tasks.ev[i];
+        manage_pidfile(task->argv[0], false);
         for(int j = 0; j < task->argc; j++) {
             free(task->argv[j]);
         }
@@ -183,9 +183,11 @@ void cleanup() {
         free(task->full_cmd);
     }
     free(tasks.ev);
+    tasks.ec = 0;
 }
 
 int main() {
+    openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     getcwd(cfg_path, PATH_MAX);
     strcat(cfg_path, "/");
     strcat(cfg_path, CFG_NAME);
@@ -194,11 +196,11 @@ int main() {
     }
     daemonize();
     signal(SIGHUP, sighup_handler);
-    openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     syslog(LOG_INFO, "Starting");
     read_cfg(cfg_path, &tasks);
     run_tasks(&tasks);
     cleanup();
+    manage_pidfile(PIDFILE, false);
     syslog(LOG_INFO, "Exiting");
     closelog();
     return 0;
