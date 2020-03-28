@@ -21,6 +21,17 @@ static entries_t tasks = {
 
 static char cfg_path[PATH_MAX];
 
+static bool handle_atexit = true;
+
+
+void exit_handler() {
+    if(handle_atexit) {
+        cleanup();
+        manage_pidfile(PIDFILE, false);
+        syslog(LOG_INFO, "Exiting");
+        closelog();
+    }
+}
 
 void sighup_handler(int sig) {
     entry_t *task;
@@ -76,17 +87,13 @@ int manage_pidfile(const char* name, bool create) {
     sprintf(pidfile_path, "/tmp/%s.pid", name);
     if(!create) {
         if(access(pidfile_path, F_OK) != -1 ) {
-            #ifdef _DEBUG
-            syslog(LOG_DEBUG, "Removing %s", pidfile_path);
-            #endif
+            DBG("Removing %s", pidfile_path);
             unlink(pidfile_path);
         }
     } else {
         FILE *f;
         char pidstr[32];
-        #ifdef _DEBUG
-        syslog(LOG_DEBUG, "Creating %s", pidfile_path);
-        #endif
+        DBG("Creating %s", pidfile_path);
         if(access(pidfile_path, F_OK) != -1 ) {
             err(ERRPIDEXS, pidfile_path, false);
             return -1;
@@ -123,14 +130,13 @@ void run_tasks(entries_t *tasklist) {
             if(pid == -1) {
                 err(NULL, NULL, true);
             } else if(pid == 0) {
+                handle_atexit = false;
                 manage_pidfile(task->argv[0], true);
                 execv(task->exec_name, task->argv);
                 exit(-1);
             } else {
                 task->pid = pid;
-                #ifdef _DEBUG
-                syslog(LOG_DEBUG, "Running %s (%d)", task->full_cmd, pid);
-                #endif
+                DBG("Running %s (%d)", task->full_cmd, pid);
             }
         }
 
@@ -144,10 +150,8 @@ void run_tasks(entries_t *tasklist) {
                 sprintf(errmsg, "%d", task->pid);
                 err(NULL, errmsg, false);
             }
-            #ifdef _DEBUG
-            syslog(LOG_DEBUG, "%s (%d) returned %d", 
+            DBG("%s (%d) returned %d", 
                     task->full_cmd, task->pid, status);
-            #endif
             manage_pidfile(task->argv[0], false);
             if(status == 0) {
                 if(!strcmp(task->action, "wait")) {
@@ -187,21 +191,18 @@ void cleanup() {
 }
 
 int main() {
+    signal(SIGHUP, sighup_handler);
+    atexit(exit_handler);
     openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     getcwd(cfg_path, PATH_MAX);
     strcat(cfg_path, "/");
     strcat(cfg_path, CFG_NAME);
     if(manage_pidfile(PIDFILE, true) == -1) {
-        return -1;
+        exit(-1);
     }
     daemonize();
-    signal(SIGHUP, sighup_handler);
     syslog(LOG_INFO, "Starting");
     read_cfg(cfg_path, &tasks);
     run_tasks(&tasks);
-    cleanup();
-    manage_pidfile(PIDFILE, false);
-    syslog(LOG_INFO, "Exiting");
-    closelog();
     return 0;
 }

@@ -31,6 +31,9 @@ int parse_config_line(const char *line, entry_t *entry) {
         err(errmsg, line, false);
         return -1;
     }
+    if(result.we_wordv[0] == NULL) {
+        return -1;
+    }
     entry->argc = result.we_wordc-1;
     if(entry->argc < 1) {
         err(ERRLNFMT, line, true);
@@ -77,9 +80,7 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
     for(int i = 0; cfg_raw[i]; i++) {
         cfg_lines_count += (cfg_raw[i] == *(char*)CFG_DELIM);
     }
-    #ifdef _DEBUG
-    syslog(LOG_DEBUG, "newlines found: %d\n", cfg_lines_count+1);
-    #endif
+    DBG("newlines found: %d\n", cfg_lines_count+1);
 
     parsed_entries->ev = calloc(cfg_lines_count, sizeof(entry_t));
     if(parsed_entries->ev == NULL) {
@@ -91,9 +92,7 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
         err(ERRFMT, NULL, true);
     }
     while(tok_ptr != NULL) {
-        #ifdef _DEBUG
-        syslog(LOG_DEBUG, "Raw entry #%d: %s\n", parsed_entries->ec, tok_ptr);
-        #endif
+        DBG("Raw entry #%d: %s\n", parsed_entries->ec, tok_ptr);
         if(strlen(tok_ptr) > 0) {
             entry_t entry;
             if(!parse_config_line(tok_ptr, &entry)) {

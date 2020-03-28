@@ -7,6 +7,12 @@
 #define PIDFILE "init2"
 #define _DEBUG
 
+#ifdef _DEBUG
+#define DBG(fmt, ...) syslog(LOG_DEBUG, fmt, ##__VA_ARGS__)
+#else
+#define DBG(fmt, ...)
+#endif
+
 typedef struct {
     unsigned argc;
     unsigned fails;
