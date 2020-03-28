@@ -30,6 +30,7 @@ char* join_str(char *strings[], char *separator, int count) {
     return str;
 }
 
+// '/bin/executable' -> 'executable'
 char* get_exec_from_abspath(char* path) {
     char *slash = rindex(path, '/');
 

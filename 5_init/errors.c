@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <syslog.h>
 
+// function that can either show system (errno) error messages
+// or custom with arguments
 void err(char *msg, const char *arg, bool critical) {
     if(msg == NULL || strlen(msg) == 0) {
         extern int errno;

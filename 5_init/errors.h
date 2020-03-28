@@ -1,3 +1,4 @@
+// wordexp error messages
 #define ERR_WRDE_BADCHAR "Illegal char"
 #define ERR_WRDE_SYNTAX "Syntax error"
 #define ERR_WRDE_NOSPACE "Out of memory"
