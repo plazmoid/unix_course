@@ -4,7 +4,7 @@
 #define ERR_WRDE_NOSPACE "Out of memory"
 
 #define ERRFMT "Wrong config format"
-#define ERRNONZR "Process exited with code %d too much times, giving up"
+#define ERRNONZR "Process %d exited with code %d too much times, giving up"
 #define ERRACT "Unknown action"
 #define ERRLNFMT "Wrong line format, see example in config"
 #define ERRPIDWR "Error writing in pidfile"

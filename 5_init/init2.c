@@ -22,6 +22,7 @@ static entries_t tasks = {
 // static fields are required by sighup_ and exit_ handlers
 static char cfg_path[PATH_MAX];
 
+// only daemon needs to use exit_handler
 static bool handle_atexit = false;
 
 // we need to exit() from different places with the same behaviour
@@ -43,7 +44,11 @@ void sighup_handler(int sig) {
         // kill all active tasks
         for(int i = 0; i < tasks.ec; i++) {
             task = &tasks.ev[i];
-            kill(task->pid, SIGTERM);
+            // give child a chance to stop gracefully
+            if(kill(task->pid, SIGTERM) > 0) {
+                kill(task->pid, SIGKILL);
+            }
+            DBG("Killing %s (%d)", task->full_cmd, task->pid);
             task->finished = true;
         }
         cleanup();
@@ -76,6 +81,7 @@ void daemonize() {
     if(pid != 0) {
         exit(0);
     }
+    // only daemon needs exit handler
     handle_atexit = true;
     // close all fildes
     getrlimit(RLIMIT_NOFILE, &lim);
@@ -107,12 +113,14 @@ int manage_pidfile(const char* name, bool create) {
             err(NULL, pidfile_path, false);
             return -1;
         }
+        // write pid
         sprintf(pidstr, "%d", getpid());
         if(!fwrite(pidstr, strlen(pidstr), 1, f)) {
             err(ERRPIDWR, pidfile_path, false);
             fclose(f);
             return -1;
         }
+        // finally this function was useful, without it was UB
         if(fclose(f)) {
             err(NULL, pidfile_path, false);
         }
@@ -147,6 +155,7 @@ void run_tasks(entries_t *tasklist) {
                 // if we're here, there was an error, just exit
                 exit(-1);
             } else {
+                // remember pid to waitpid() it later
                 task->pid = pid;
                 DBG("Running %s (%d)", task->full_cmd, pid);
             }
@@ -184,7 +193,7 @@ void run_tasks(entries_t *tasklist) {
                     // if child exited with non zero code more
                     // than FAILS_LIMIT times, don't launch it anymore
                     char errmsg[512];
-                    sprintf(errmsg, ERRNONZR, status);
+                    sprintf(errmsg, ERRNONZR, task->pid, status);
                     err(errmsg, task->full_cmd, false);
                     task->finished = true;
                 }
