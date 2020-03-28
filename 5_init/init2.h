@@ -5,7 +5,7 @@
 #define CFG_NAME "init2.cfg"
 #define CFG_DELIM "\n"
 #define PIDFILE "init2"
-//#define _DEBUG
+#define _DEBUG
 
 typedef struct {
     unsigned argc;

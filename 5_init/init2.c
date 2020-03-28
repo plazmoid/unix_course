@@ -74,15 +74,19 @@ void daemonize() {
 int manage_pidfile(const char* name, bool create) {
     char pidfile_path[512];
     sprintf(pidfile_path, "/tmp/%s.pid", name);
-    //strcpy(pidfile_path, "/tmp/");
-    //strcat(pidfile_path, name);
     if(!create) {
+        #ifdef _DEBUG
+        syslog(LOG_DEBUG, "Removing %s", pidfile_path);
+        #endif
         if(unlink(pidfile_path) == -1) {
             err(NULL, pidfile_path, false);
         }
     } else {
         FILE *f;
         char pidstr[32];
+        #ifdef _DEBUG
+        syslog(LOG_DEBUG, "Creating %s", pidfile_path);
+        #endif
         if(access(pidfile_path, F_OK) != -1 ) {
             err(ERRPIDEXS, pidfile_path, false);
             return -1;
@@ -140,11 +144,11 @@ void run_tasks(entries_t *tasklist) {
                 sprintf(errmsg, "%d", task->pid);
                 err(NULL, errmsg, false);
             }
-            manage_pidfile(task->argv[0], false);
             #ifdef _DEBUG
-            syslog(LOG_DEBUG, "%d (%s) returned %d", 
-                    task->pid, task->full_cmd, status);
+            syslog(LOG_DEBUG, "%s (%d) returned %d", 
+                    task->full_cmd, task->pid, status);
             #endif
+            manage_pidfile(task->argv[0], false);
             if(status == 0) {
                 if(!strcmp(task->action, "wait")) {
                     task->finished = true;        
@@ -169,6 +173,7 @@ void run_tasks(entries_t *tasklist) {
 
 void cleanup() {
     entry_t *task;
+    manage_pidfile(PIDFILE, false);
     for(int i = 0; i < tasks.ec; i++) {
         task = &tasks.ev[i];
         for(int j = 0; j < task->argc; j++) {
@@ -178,7 +183,6 @@ void cleanup() {
         free(task->full_cmd);
     }
     free(tasks.ev);
-    manage_pidfile(PIDFILE, false);
 }
 
 int main() {
