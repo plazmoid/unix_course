@@ -21,7 +21,7 @@ static entries_t tasks = {
 
 static char cfg_path[PATH_MAX];
 
-static bool handle_atexit = true;
+static bool handle_atexit = false;
 
 
 void exit_handler() {
@@ -74,6 +74,7 @@ void daemonize() {
     if(pid != 0) {
         exit(0);
     }
+    handle_atexit = true;
     //close all fildes
     getrlimit(RLIMIT_NOFILE, &lim);
     for(int fd = 0; fd < lim.rlim_max; fd++) {
@@ -83,6 +84,7 @@ void daemonize() {
 }
 
 int manage_pidfile(const char* name, bool create) {
+    pid_t pid;
     char pidfile_path[512];
     sprintf(pidfile_path, "/tmp/%s.pid", name);
     if(!create) {
@@ -93,7 +95,7 @@ int manage_pidfile(const char* name, bool create) {
     } else {
         FILE *f;
         char pidstr[32];
-        DBG("Creating %s", pidfile_path);
+        DBG("Creating pidfile %s", pidfile_path);
         if(access(pidfile_path, F_OK) != -1 ) {
             err(ERRPIDEXS, pidfile_path, false);
             return -1;
@@ -103,11 +105,14 @@ int manage_pidfile(const char* name, bool create) {
             err(NULL, pidfile_path, false);
             return -1;
         }
-        sprintf(pidstr, "%d", getpid());
+        pid = getpid();
+        sprintf(pidstr, "%d", pid);
         if(!fwrite(pidstr, strlen(pidstr), 1, f)) {
             err(ERRPIDWR, pidfile_path, false);
+            fclose(f);
             return -1;
         }
+        fclose(f);
     }
     return 0;
 }
@@ -194,14 +199,14 @@ int main() {
     signal(SIGHUP, sighup_handler);
     atexit(exit_handler);
     openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
+    syslog(LOG_INFO, "Starting");
     getcwd(cfg_path, PATH_MAX);
     strcat(cfg_path, "/");
     strcat(cfg_path, CFG_NAME);
+    daemonize();
     if(manage_pidfile(PIDFILE, true) == -1) {
         exit(-1);
     }
-    daemonize();
-    syslog(LOG_INFO, "Starting");
     read_cfg(cfg_path, &tasks);
     run_tasks(&tasks);
     return 0;
