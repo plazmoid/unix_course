@@ -36,6 +36,8 @@ char* get_exec_from_abspath(char* path) {
     if(slash == NULL) {
         return path;
     } else {
-        return slash+1;
+        char *ret = strdup(slash+1);
+        free(path);
+        return ret;
     }
 }
