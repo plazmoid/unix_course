@@ -35,7 +35,7 @@ int parse_config_line(const char *line, entry_t *entry) {
         err(errmsg, line, false);
         return -1;
     }
-    // if string contains only whitespaces, skip it
+    // if string contains weird chars (whitespaces, ...), skip it
     if(result.we_wordv[0] == NULL) {
         return -1;
     }
@@ -49,14 +49,14 @@ int parse_config_line(const char *line, entry_t *entry) {
     // we need to copy the last word in line into separate field
     // because it is an action, not an argument
     entry->action = strdup(result.we_wordv[entry->argc]);
-    // create char** argv that will be passed to execvp() 
+    // create char** argv that will be passed to execv() 
     entry->argv = result.we_wordv;
     // according to exec(3P), the last argv must be (char*)0
     entry->argv[entry->argc] = (char*)0;
     entry->exec_name = strdup(entry->argv[0]);
+    entry->full_cmd = join_str(entry->argv, " ", entry->argc);
     // argv[0] should hold only binary's name, not full path
     entry->argv[0] = get_exec_from_abspath(entry->argv[0]);
-    entry->full_cmd = join_str(entry->argv, " ", entry->argc);
     entry->finished = false;
     // check action on validity
     if(strcmp(entry->action, "wait") != 0 && 
@@ -98,6 +98,7 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
     }
     DBG("newlines found: %d\n", cfg_lines_count+1);
 
+    // allocate memory at least for every config line
     parsed_entries->ev = calloc(cfg_lines_count, sizeof(entry_t));
     if(parsed_entries->ev == NULL) {
         err(NULL, NULL, true);
@@ -124,4 +125,10 @@ void read_cfg(char *cfg_path, entries_t* parsed_entries) {
         tok_ptr = strtok(NULL, CFG_DELIM);
     }
     free(cfg_raw);
+    // reduce size of array of entry_t 
+    // to it exact size: sizeof(entry_t)*entries_count
+    parsed_entries->ev = realloc(
+        parsed_entries->ev,
+        parsed_entries->ec * sizeof(entry_t)
+    );
 }
