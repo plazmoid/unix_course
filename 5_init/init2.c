@@ -221,6 +221,7 @@ void cleanup() {
 }
 
 int main() {
+    /*
     // use sigaction() instead of signal() to handle SIGHUP
     // to prevent handler from running only single time
     struct sigaction sa;
@@ -228,10 +229,12 @@ int main() {
     sa.sa_flags = SA_RESTART;
     sigemptyset(&sa.sa_mask);
     
-    openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     if(sigaction(SIGHUP, &sa, NULL) == -1) {
         err(NULL, NULL, true);
-    }
+    }*/
+
+    signal(SIGHUP, sighup_handler);
+    openlog(LOG_IDENT, LOG_PID | LOG_CONS, LOG_DAEMON);
     atexit(exit_handler);
     syslog(LOG_INFO, "Starting");
     // remember full path to config because
