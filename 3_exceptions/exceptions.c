@@ -24,35 +24,70 @@ void err(char *msg, const char *arg, bool critical) {
 }
 
 int main(int argc, char** argv) {
-	int fd, nbytes;
-	// indicates if currently reading zeroes
-	bool zstart = false;
-	char *parsed_int;
-	char chunk[BUF_SIZE];
+	int fdi, fdo, nbytes;
+	char chunk[BUF_SIZE], ch;
+	unsigned long long parsed_int_size = 0;
+	char *parsed_int = calloc(1, SINGL_INT_BUF_SIZE);
 	if (argc < 3) {
-		char *usage;
+		char usage[128];
 		sprintf(usage, "Usage: %s <in_1>, ..., <in_N>, <out>\n", argv[0]);
 		err(usage, NULL, true);
 	}
+	if((fdo = creat(argv[argc-1], 0660)) == -1) {
+		err(NULL, argv[argc-1], true);
+	}
 	for(int i = 1; i < argc - 1; i++) {
-		int fd;
-		if((fd = open(argv[i], O_RDONLY)) == -1) {
-			printf("src %d: %s\n", i, argv[i]);
-		} else {
+		if((fdi = open(argv[i], O_RDONLY)) == -1) {
 			err(NULL, argv[i], false);
+			continue;
 		}
 		while (1) {
-			// read stdin until eof
-			nbytes = read(STDIN_FILENO, chunk, BUF_SIZE);
+			parsed_int_size = 0;
+			// read file until eof
+			nbytes = read(fdi, chunk, BUF_SIZE);
 			if(nbytes == EOF) {
 				break;
 			}
 			// read current chunk
 			for(int offset = 0; offset < nbytes; offset++) {
+				ch = chunk[offset];
+				DBG("next symb: %c\n", ch);
+				if(isdigit(ch)) {
+					DBG("%c is a digit\n", ch);
+					//don't catch first zero
+					if(ch == 0 && parsed_int_size == 0) {
+						continue;
+					}
+					// if int is too big for our buffer (with \0), realloc it
+					if(parsed_int_size > 0 && parsed_int_size % (SINGL_INT_BUF_SIZE - 1) == 0) {
+						parsed_int = realloc(parsed_int, 
+							SINGL_INT_BUF_SIZE * (parsed_int_size / (SINGL_INT_BUF_SIZE - 1))
+						);
+					}
+					parsed_int[parsed_int_size] = ch;
+					parsed_int[++parsed_int_size] = '\0';
+				} else {
+					if(parsed_int_size > 0) {
+						DBG("num is present: ");
+						DBG("%s\n", parsed_int);
+						if(write(fdo, parsed_int, parsed_int_size) == -1) {
+							err(NULL, argv[i], false);
+						} else {
+							if(write(fdo, "\n", 1) == -1) {
+								err(NULL, argv[i], false);
+							}
+						}
+						memset(parsed_int, '\0', parsed_int_size);
+						parsed_int_size = 0;
+					}
+				}
+			}
+			// if read less bytes than BUF_SIZE, it means we read the last chunk, break
+			if(nbytes < BUF_SIZE) {
+				break;
 			}
 		}
-
-		close(fd);
+		close(fdi);
 	}
-	printf("into: %s\n", argv[argc-1]);
+	close(fdo);
 }
