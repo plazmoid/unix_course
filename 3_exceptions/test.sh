@@ -4,7 +4,7 @@ make
 INPUTS=$(ls inp*)
 OUT=./out.txt
 ./exceptions $INPUTS $OUT
-RIGHT_RESULT=$(cat $INPUTS | grep -aoP '\d*')
+RIGHT_RESULT=$(cat $INPUTS | grep -aoP '\d*' | sort -n)
 RESULT=$(cat $OUT)
 if [[ $RIGHT_RESULT == $RESULT ]]; then
     echo 'All ok!'

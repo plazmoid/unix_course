@@ -25,20 +25,27 @@ void err(char *msg, const char *arg, bool critical) {
 }
 
 int main(int argc, char** argv) {
+	// fildes for input files; for output; amount of read bytes; sort pid; sort return code
 	int fdi, fdo, nbytes, pid, status;
+	// chunk to store data from files; current char
 	char chunk[BUF_SIZE], ch;
+	// digits in current int
 	unsigned long long parsed_int_size = 0;
+	// i'm storing int in char* because it may be really big
 	char *parsed_int = calloc(1, SINGL_INT_BUF_SIZE);
 	if (argc < 3) {
 		char usage[128];
 		sprintf(usage, "Usage: %s <in_1>, ..., <in_N>, <out>\n", argv[0]);
 		err(usage, NULL, true);
 	}
+	// write in temp file first because we can't $ sort qwe > qwe
 	if((fdo = creat(TMP_UNSORTED, 0660)) == -1) {
 		err(NULL, TMP_UNSORTED, true);
 	}
+	// loop over every input file
 	for(int i = 1; i < argc - 1; i++) {
 		if((fdi = open(argv[i], O_RDONLY)) == -1) {
+			// can't open? just skip
 			err(NULL, argv[i], false);
 			continue;
 		}
@@ -53,13 +60,8 @@ int main(int argc, char** argv) {
 			for(int offset = 0; offset < nbytes; offset++) {
 				ch = chunk[offset];
 				if(isdigit(ch)) {
-					//don't catch first zero
-					if(ch == 0 && parsed_int_size == 0) {
-						continue;
-					}
 					// if int is too big for our buffer (with \0), realloc it
 					if(parsed_int_size > 0 && parsed_int_size % (SINGL_INT_BUF_SIZE - 1) == 0) {
-						DBG("int size is %llu, realloc\n", parsed_int_size);
 						parsed_int = realloc(parsed_int, 
 							SINGL_INT_BUF_SIZE * (parsed_int_size / (SINGL_INT_BUF_SIZE - 1) + 1));
 					}
@@ -67,7 +69,7 @@ int main(int argc, char** argv) {
 					parsed_int[++parsed_int_size] = '\0';
 				} else {
 					if(parsed_int_size > 0) {
-						DBG("writing int with len %llu\n", parsed_int_size);
+						// if scanned whole number, write it into tmp file
 						if(write(fdo, parsed_int, parsed_int_size) == -1) {
 							err(NULL, argv[i], false);
 						} else {
@@ -75,6 +77,7 @@ int main(int argc, char** argv) {
 								err(NULL, argv[i], false);
 							}
 						}
+						// free space for the next number (instead of free/calloc)
 						memset(parsed_int, '\0', parsed_int_size);
 						parsed_int_size = 0;
 					}
@@ -89,22 +92,32 @@ int main(int argc, char** argv) {
 	}
 	close(fdo);
 
+	// sort
 	pid = fork();
     if(pid == -1) {
         err(NULL, NULL, true);
     } else if(pid == 0) {
+		// we'll sort into outfile parsed from args
 		if((fdo = creat(argv[argc-1], 0660)) == -1) {
 			err(NULL, argv[argc-1], true);
 		}
+		// redirect into outfile
 		dup2(fdo, STDOUT_FILENO);
 		close(fdo);
 		execl("/bin/sort", "sort", "-n", TMP_UNSORTED, (char*)NULL);
+		// sort exited with error, print it
 		err(NULL, NULL, true);
 	} else {
 		if(waitpid(pid, &status, 0) == -1) {
 			err(NULL, NULL, false);
 		}
 		unlink(TMP_UNSORTED);
+		// print exit status of sort
+		if(status != 0) {
+			char errmsg[64];
+			sprintf(errmsg, "Sort exited with status %d", status);
+			err(errmsg, NULL, false);
+		}
 	}
 	return 0;
 }
