@@ -24,11 +24,20 @@ void err(char *msg, const char *arg, bool critical) {
     }
 }
 
+unsigned zero_offset(char *num) {
+	unsigned i = 0;
+	for(; num[i] == '0'; i++);
+	return i;
+}
+
 int main(int argc, char** argv) {
-	// fildes for input files; for output; amount of read bytes; sort pid; sort return code
+	// fildes for input files; for output; amount of read bytes; 
+	//sort pid; sort return code
 	int fdi, fdo, nbytes, pid, status;
 	// chunk to store data from files; current char
 	char chunk[BUF_SIZE], ch;
+	//amount of leading zeros to skip
+	unsigned lzero_offset = 0;
 	// digits in current int
 	unsigned long long parsed_int_size = 0;
 	// i'm storing int in char* because it may be really big
@@ -61,16 +70,26 @@ int main(int argc, char** argv) {
 				ch = chunk[offset];
 				if(isdigit(ch)) {
 					// if int is too big for our buffer (with \0), realloc it
-					if(parsed_int_size > 0 && parsed_int_size % (SINGL_INT_BUF_SIZE - 1) == 0) {
+					if(parsed_int_size > 0 && 
+					parsed_int_size % (SINGL_INT_BUF_SIZE - 1) == 0) {
+						// just add SINGL_INT_BUF_SIZE bytes
 						parsed_int = realloc(parsed_int, 
-							SINGL_INT_BUF_SIZE * (parsed_int_size / (SINGL_INT_BUF_SIZE - 1) + 1));
+							SINGL_INT_BUF_SIZE * 
+							(parsed_int_size / (SINGL_INT_BUF_SIZE - 1) + 1)
+						);
 					}
 					parsed_int[parsed_int_size] = ch;
 					parsed_int[++parsed_int_size] = '\0';
 				} else {
 					if(parsed_int_size > 0) {
+						lzero_offset = 0;
+						// if current number is not 0, but has leading 0s
+						if(parsed_int_size > 1 && *parsed_int == '0') {
+							lzero_offset = zero_offset(parsed_int);
+						}
 						// if scanned whole number, write it into tmp file
-						if(write(fdo, parsed_int, parsed_int_size) == -1) {
+						if(write(fdo, parsed_int + lzero_offset, 
+									parsed_int_size - lzero_offset) == -1) {
 							err(NULL, argv[i], false);
 						} else {
 							if(write(fdo, "\n", 1) == -1) {
