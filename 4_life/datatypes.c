@@ -9,15 +9,12 @@ unsigned euclid_mod(int n, int mod) {
 
 char get_cell(const CellField* cf, int x, int y) {
     normalize_coords(cf, &x, &y);
-    DBG("TRYEN TO GGGGGGET at %d %d ", x, y);
     char c = cf->field[y][x];
-    DBG("... got cell '%c'\n", c);
     return c;
 }
 
 void set_cell(CellField* cf, int x, int y, char cell) {
     normalize_coords(cf, &x, &y);
-    DBG("set cell at %d %d: '%c'\n", x, y, cell);
     if(cell == CELL || cell == NO_CELL) {
         cf->field[y][x] = cell;
     } else {

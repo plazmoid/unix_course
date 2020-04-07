@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
 #include "life.h"
 #include "datatypes.h"
 
@@ -12,6 +15,10 @@ static CellField cfield = {
     .fy = 0,
     .field = NULL
 };
+
+static int listen_socket_fd;
+static struct sockaddr_in addr;
+
 
 void err(char *msg, const char *arg, bool critical) {
     if(msg == NULL || strlen(msg) == 0) {
@@ -27,15 +34,54 @@ void err(char *msg, const char *arg, bool critical) {
     }
 }
 
+int errwrap(int ret) {
+    if(ret == -1) {
+        err(NULL, NULL, true);
+        return -1;
+    } else {
+        return ret;
+    }
+}
+
+void sock_init() {
+    listen_socket_fd = errwrap(socket(AF_INET, SOCK_STREAM, 0));
+    int flags = errwrap(fcntl(listen_socket_fd, F_GETFL));
+    errwrap(fcntl(listen_socket_fd, F_SETFL, flags | O_NONBLOCK));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(31337);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    errwrap(bind(listen_socket_fd, (struct sockaddr*)&addr, sizeof(addr)));
+    errwrap(listen(listen_socket_fd, 5));
+}
+
+void client_handler(CellField *cfield) {
+    char buf[(cfield->fx + 1)*cfield->fy];
+    int bytes_written = 0;
+    int client_socket_fd = accept(listen_socket_fd, NULL, NULL);
+    if(client_socket_fd == -1) {
+        if(errno != EWOULDBLOCK) {
+            err(NULL, NULL, true);
+        }
+    } else {
+        for(int y = 0; y < cfield->fy; y++) {
+            memcpy(buf+bytes_written, cfield->field[y], cfield->fx);
+            bytes_written += cfield->fx;
+            buf[bytes_written] = '\n';
+            bytes_written++;
+        }
+        errwrap(send(client_socket_fd, buf, bytes_written, 0));
+        close(client_socket_fd);
+    }
+}
+
 void game_of_life(CellField *cfield) {
     ActionTuple *action, *fld_actions;
     int neighbours = 0;
     int fld_actions_len = 0;
     fld_actions = malloc(cfield->fx * cfield->fy);
-    DBG("mallocd actions\n");
     while(1) {
         fld_actions_len = 0;
-        ////////////////
+        /*///////////////
         system("clear");
         printf("  ");
         for(int x = 0; x < cfield->fx; x++) {
@@ -55,7 +101,7 @@ void game_of_life(CellField *cfield) {
             printf("%d", x);
         }
         printf("\n");
-        ////////////////
+        ////////////////*/
         for(int x = 0; x < cfield->fx; x++) {
             for(int y = 0; y < cfield->fy; y++) {
                 neighbours = count_neighbours(cfield, x, y);
@@ -80,7 +126,6 @@ void game_of_life(CellField *cfield) {
                 }
             }
         }
-        sleep(1);
         fld_actions_len--;
         for(; fld_actions_len >= 0; fld_actions_len--) {
             action = &fld_actions[fld_actions_len];
@@ -90,12 +135,15 @@ void game_of_life(CellField *cfield) {
                 set_cell(cfield, action->fx, action->fy, NO_CELL);
             }
         }
+        client_handler(cfield);
+        sleep(1);
     }
     free(fld_actions);
 }
 
 int main(int argc, char **argv) {
     char cell;
+    sock_init();
     FILE *input = fopen(INITFILE, "r");
     if(input == NULL) {
         err(NULL, INITFILE, true);
@@ -125,20 +173,13 @@ int main(int argc, char **argv) {
                 col++;
             } else if(cell != '\n') {
                 char errmsg[64], cellstr[2];
-                sprintf(errmsg, ERR_WRONG_CELL_VAL, col, row);
+                sprintf(errmsg, ERR_WRONG_CELL_VAL, col+1, row+1);
                 cellstr[0] = cell;
                 cellstr[1] = '\0';
                 err(errmsg, cellstr, true);
             }
         }
-    }/*
-    for(int y = 0; y < cfield.fy; y++) {
-        for(int x = 0; x < cfield.fx; x++) {
-            printf("%c", get_cell(&cfield, x, y));
-        }
-        printf(" %d\n", y);
     }
-    sleep(3);*/
     game_of_life(&cfield);
 
     for(int row = 0; row < cfield.fy; row++) {
