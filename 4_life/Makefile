@@ -1,2 +1,2 @@
 all:
-	gcc life.c -o life -Wall
+	gcc life.c datatypes.c -o life -Wall
