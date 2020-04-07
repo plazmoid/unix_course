@@ -37,20 +37,30 @@ void game_of_life(CellField *cfield) {
         fld_actions_len = 0;
         ////////////////
         system("clear");
+        printf("  ");
+        for(int x = 0; x < cfield->fx; x++) {
+            printf("%d", x);
+        }
+        printf("\n");
         for(int y = 0; y < cfield->fy; y++) {
+            printf("%d ", y);
             for(int x = 0; x < cfield->fx; x++) {
                 char c = get_cell(cfield, x, y);
                 printf("%c", c);
             }
             printf("\n");
         }
-        sleep(2);
+        printf("  ");
+        for(int x = 0; x < cfield->fx; x++) {
+            printf("%d", x);
+        }
+        printf("\n");
         ////////////////
         for(int x = 0; x < cfield->fx; x++) {
             for(int y = 0; y < cfield->fy; y++) {
                 neighbours = count_neighbours(cfield, x, y);
-                if(neighbours <= 3 && neighbours >= 2) {
-                    if(get_cell(cfield, x, y) == NO_CELL) {
+                if(neighbours == 3 || neighbours == 2) {
+                    if(get_cell(cfield, x, y) == NO_CELL && neighbours == 3) {
                         fld_actions[fld_actions_len] = (ActionTuple){
                             .c_action = SPAWN,
                             .fx = x,
@@ -70,6 +80,7 @@ void game_of_life(CellField *cfield) {
                 }
             }
         }
+        sleep(1);
         fld_actions_len--;
         for(; fld_actions_len >= 0; fld_actions_len--) {
             action = &fld_actions[fld_actions_len];
@@ -120,14 +131,14 @@ int main(int argc, char **argv) {
                 err(errmsg, cellstr, true);
             }
         }
-    }
+    }/*
     for(int y = 0; y < cfield.fy; y++) {
         for(int x = 0; x < cfield.fx; x++) {
             printf("%c", get_cell(&cfield, x, y));
         }
         printf(" %d\n", y);
     }
-    sleep(3);
+    sleep(3);*/
     game_of_life(&cfield);
 
     for(int row = 0; row < cfield.fy; row++) {
