@@ -17,7 +17,7 @@ void err(char *msg, const char *arg, bool critical) {
     if(msg == NULL || strlen(msg) == 0) {
         msg = strerror(errno);
     }
-    if (arg != NULL && strlen(arg) > 0) {
+    if (arg != NULL) {
         fprintf(stderr, "%s, '%s'\n", msg, arg);
     } else {
         fprintf(stderr, "%s\n", msg);
@@ -42,7 +42,7 @@ void game_of_life(CellField *cfield) {
                 char c = get_cell(cfield, x, y);
                 printf("%c", c);
             }
-            printf(" %d\n", y);
+            printf("\n");
         }
         sleep(2);
         ////////////////
@@ -74,9 +74,9 @@ void game_of_life(CellField *cfield) {
         for(; fld_actions_len >= 0; fld_actions_len--) {
             action = &fld_actions[fld_actions_len];
             if(action->c_action == SPAWN) {
-                set_cell(cfield, action->fx, action->fy, true);
+                set_cell(cfield, action->fx, action->fy, CELL);
             } else if(action->c_action == REMOVE) {
-                set_cell(cfield, action->fx, action->fy, false);
+                set_cell(cfield, action->fx, action->fy, NO_CELL);
             }
         }
     }
@@ -95,39 +95,38 @@ int main(int argc, char **argv) {
     if(cfield.fx > FIELD_MAX_X || cfield.fy > FIELD_MAX_Y) {
         err(ERR_TOO_LARGE, NULL, true);
     }
-    cfield.field = (char**)malloc(cfield.fy);
+    cfield.field = calloc(cfield.fy, sizeof(char*));
     if(cfield.field == NULL) {
         err(NULL, "field", true);
     }
     for(int row = 0; row < cfield.fy; row++) {
-        cfield.field[row] = (char*)malloc(cfield.fx);
+        cfield.field[row] = (char*)calloc(1, cfield.fx);
         fscanf(input, "%s\n", cfield.field[row]);
+        DBG("reading row %d\n", row);
+        //DBG("row: %s\n", cfield.field[row]);
         if(ferror(input) > 0) {
             err(NULL, NULL, true);
         }
-        //DBG("read row %d\n", row);
         for(int col = 0; col < cfield.fx; ) {
             cell = get_cell(&cfield, col, row);
             if(cell == NO_CELL || cell == CELL) {
                 set_cell(&cfield, col, row, cell);
                 col++;
-                printf("%c", get_cell(&cfield, col, row));
             } else if(cell != '\n') {
                 char errmsg[64], cellstr[2];
-                sprintf(errmsg, ERR_WRONG_CELL_VAL, col+1, row+1);
+                sprintf(errmsg, ERR_WRONG_CELL_VAL, col, row);
                 cellstr[0] = cell;
                 cellstr[1] = '\0';
                 err(errmsg, cellstr, true);
             }
         }
-        printf("\n");
-    }/*
+    }
     for(int y = 0; y < cfield.fy; y++) {
         for(int x = 0; x < cfield.fx; x++) {
             printf("%c", get_cell(&cfield, x, y));
         }
         printf(" %d\n", y);
-    }*/
+    }
     sleep(3);
     game_of_life(&cfield);
 

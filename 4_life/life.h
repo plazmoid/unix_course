@@ -9,7 +9,7 @@
 #define CELL 'o'
 #define NO_CELL '.'
 
-#define _DEBUG
+//#define _DEBUG
 
 #ifdef _DEBUG
 #define DBG(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
