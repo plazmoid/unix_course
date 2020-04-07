@@ -1,14 +1,17 @@
+// field with cells
 typedef struct {
     unsigned fx; // field sizes
     unsigned fy;
     char ** field; // 2D-field
 } CellField;
 
+// what is cell gonna do in the next iteration
 typedef enum {
     SPAWN,
     REMOVE
 } CellAction;
 
+// we'll store here next cell state to apply it later
 typedef struct {
     unsigned fx;
     unsigned fy;

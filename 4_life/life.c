@@ -12,6 +12,7 @@
 #include "life.h"
 #include "datatypes.h"
 
+// field with cells
 static CellField cfield = {
     .fx = 0,
     .fy = 0,
@@ -36,6 +37,7 @@ void err(char *msg, const char *arg, bool critical) {
     }
 }
 
+// handy error checker
 int errwrap(int ret) {
     if(ret == -1) {
         err(NULL, NULL, true);
@@ -49,17 +51,19 @@ void sock_init() {
     int opt = 1;
     listen_socket_fd = errwrap(socket(AF_INET, SOCK_STREAM, 0));
     int flags = errwrap(fcntl(listen_socket_fd, F_GETFL));
-    errwrap(fcntl(listen_socket_fd, F_SETFL, flags | O_NONBLOCK));
+    // make i/o with socket non-blocking
+    errwrap(fcntl(listen_socket_fd, F_SETFL, flags | O_NONBLOCK)); 
     errwrap(setsockopt(listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, 
             &opt, sizeof(int)));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(31337);
+    addr.sin_port = htons(31338);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     errwrap(bind(listen_socket_fd, (struct sockaddr*)&addr, sizeof(addr)));
     errwrap(listen(listen_socket_fd, 5));
 }
 
 void client_handler(CellField *cfield) {
+    // we need to send the whole field with \n
     char buf[(cfield->fx + 1)*cfield->fy];
     int bytes_written = 0;
     int client_socket_fd = accept(listen_socket_fd, NULL, NULL);
@@ -68,6 +72,7 @@ void client_handler(CellField *cfield) {
             err(NULL, NULL, true);
         }
     } else {
+        // fill send buffer line by line
         for(int y = 0; y < cfield->fy; y++) {
             memcpy(buf+bytes_written, cfield->field[y], cfield->fx);
             bytes_written += cfield->fx;
@@ -80,21 +85,29 @@ void client_handler(CellField *cfield) {
 }
 
 void game_of_life(CellField *cfield) {
+    // &ActionTuple; array of actions
     ActionTuple *action, *fld_actions;
-    int neighbours = 0;
     int fld_actions_len = 0;
+    int neighbours = 0;
+    // if true, then we can make next life iteration
     bool sync_ready = true;
+    // fildes of sync file
     int sync_fd;
     time_t real_time = 0, delta = 0;
     struct stat file_stat;
     fld_actions = malloc(cfield->fx * cfield->fy);
+    // game cycle
     while(1) {
         fld_actions_len = 0;
+        // lookup for every cell
         for(int x = 0; x < cfield->fx; x++) {
             for(int y = 0; y < cfield->fy; y++) {
+                // implementing game rules
                 neighbours = count_neighbours(cfield, x, y);
                 if(neighbours == 3 || neighbours == 2) {
                     if(get_cell(cfield, x, y) == NO_CELL && neighbours == 3) {
+                        // its better to perform all changes after full field scan
+                        // so just store them
                         fld_actions[fld_actions_len] = (ActionTuple){
                             .c_action = SPAWN,
                             .fx = x,
@@ -115,6 +128,7 @@ void game_of_life(CellField *cfield) {
             }
         }
         fld_actions_len--;
+        // apply all changes
         for(; fld_actions_len >= 0; fld_actions_len--) {
             action = &fld_actions[fld_actions_len];
             if(action->c_action == SPAWN) {
@@ -123,27 +137,33 @@ void game_of_life(CellField *cfield) {
                 set_cell(cfield, action->fx, action->fy, NO_CELL);
             }
         }
+        // now we have to wait for sync permit
         sync_ready = false;
+        // touch sync file
         sync_fd = creat(SYNCFILE, 0666);
         if(sync_fd == -1) {
             err(NULL, SYNCFILE, true);
         }
+		close(sync_fd);
         while(!sync_ready) {
+            // handle connections while waiting
             client_handler(cfield);
             errwrap(stat(SYNCFILE, &file_stat));
             time(&real_time);
-            delta = real_time - file_stat.st_mtime;
+            delta = real_time - file_stat.st_mtime; // seconds
             if(delta == 1) {
                 sync_ready = true;
-            } else if(delta > 1) {
+            } else if(delta > 1) { // print warn message if sync was too long
                 char delta_val[32];
                 sprintf(delta_val, "%ld", delta);
                 err(ERR_LONG_TICK, delta_val, false);
                 sync_ready = true;
             }
-            usleep(500);
+            usleep(500); // just to not overload processor
         }
     }
+    // actually this string is never gonna execute, because program could be interrupted only by ^C
+    // but whatever
     free(fld_actions);
 }
 
@@ -166,10 +186,12 @@ int main(int argc, char **argv) {
     }
     for(int row = 0; row < cfield.fy; row++) {
         cfield.field[row] = (char*)calloc(1, cfield.fx);
+        // read from initfile line by line
         fscanf(input, "%s\n", cfield.field[row]);
         if(ferror(input) > 0) {
             err(NULL, NULL, true);
         }
+        // check loaded string for errors
         for(int col = 0; col < cfield.fx; ) {
             cell = get_cell(&cfield, col, row);
             if(cell == NO_CELL || cell == CELL) {

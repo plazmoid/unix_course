@@ -7,6 +7,16 @@ unsigned euclid_mod(int n, int mod) {
     return ((n % mod) + mod) % mod;
 }
 
+void normalize_coords(const CellField* cf, int* x, int* y) {
+    int dx = *x;
+    int dy = *y;
+    *x = (dx >= 0 && dx < cf->fx)? dx : euclid_mod(dx, cf->fx);
+    *y = (dy >= 0 && dy < cf->fy)? dy : euclid_mod(dy, cf->fy);
+}
+
+// all functions below are safe to use even with negative arguments
+// euclid_mod will correct wrong value
+
 char get_cell(const CellField* cf, int x, int y) {
     normalize_coords(cf, &x, &y);
     char c = cf->field[y][x];
@@ -31,7 +41,7 @@ unsigned count_neighbours(const CellField* cf, int x, int y) {
     for(int dx = -1; dx <= 1; dx++) {
         for(int dy = -1; dy <= 1; dy++) {
             if(dx == 0 && dy == 0) {
-                continue;
+                continue; // don't count ourself
             }
             nx = x + dx;
             ny = y + dy;
@@ -41,11 +51,4 @@ unsigned count_neighbours(const CellField* cf, int x, int y) {
         }
     }
     return cnt;
-}
-
-void normalize_coords(const CellField* cf, int* x, int* y) {
-    int dx = *x;
-    int dy = *y;
-    *x = (dx >= 0 && dx < cf->fx)? dx : euclid_mod(dx, cf->fx);
-    *y = (dy >= 0 && dy < cf->fy)? dy : euclid_mod(dy, cf->fy);
 }
