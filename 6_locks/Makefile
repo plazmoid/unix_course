@@ -1,1 +1,2 @@
-gcc locks.c -o locks -Wall
+all:
+	gcc locks.c -o locks -Wall
