@@ -30,19 +30,48 @@ int errwrap(int ret) {
 }
 
 int manage_lock(char *file, lock_t l_type, bool acq_lock) {
-    int lfd;
-    char lck_path[512];
+    // lock fd, split index
+    int lfd, n_idx;
+    // path to lockfile, pid read from lockfile
+    // raw buffer to read in, lock char (w/r)
+    char lck_path[512], read_pid[16], buf[64], lc;
+    // pid of the current process
     char pid[16];
+    // if file is already locked
     bool locked; 
     
     sprintf(lck_path, "%s/%s.%s", LCK_DIR, file, LCK_SUFFIX);
     locked = access(lck_path, F_OK) == 0;
     if(locked) {
+        // if file has lock, parse it
+        lfd = errwrap(open(lck_path, O_RDONLY));
+        errwrap(read(lfd, buf, 63));
+        close(lfd);
+        // poor analogue of split
+        n_idx = index(buf, '\n');
+        if(n_idx == NULL) {
+            err(ERR_FMT, lck_path, true);
+        }
+        // read pid from lockfile
+        strncpy(read_pid, buf, n_idx);
+        // and the type of lock
+        lc = buf[n_idx+1];
+        if(lc != LCKF_WR && lc != LCKF_RD) {
+            err(ERR_FMT, lck_path, true);
+        }
         if(acq_lock) {
+            // and we want to lock it again
+            // in case of existing exclusive lock
+            // fail to lock immediately
+            if(lc == LCKF_WR) {
+                return LE_LOCKD;
+            }
+            // if lock is shared
             switch (l_type) {
+                // can't lock exclusively
                 case L_WR:
                     return LE_LOCKD;
-
+                // but can create infinite shared locks
                 case L_RD:
                     return 0;
 
@@ -51,30 +80,36 @@ int manage_lock(char *file, lock_t l_type, bool acq_lock) {
                     return LE_SOME;
             }
         } else {
-            char read_pid[16];
-            lfd = errwrap(open(lck_path, O_RDONLY));
-            errwrap(read(lfd, read_pid, 15));
-            close(lfd);
+            // if want to unlock
             sprintf(pid, "%d", (int)getpid());
-            if(strncmp(pid, read_pid, strlen(pid)) == 0) {
+            // compare pids to ensure that we've created a lock
+            if(strcmp(pid, read_pid) == 0) {
                 return unlink(lck_path);
             }
+            // or realise that we're 
+            // trying to remove foreign lock
             return LE_PID_NE;
         }
     } else {
+        // if want to lock and there are no lockfiles
         if(acq_lock) {
             lfd = errwrap(open(lck_path, O_CREAT | O_WRONLY));
             sprintf(pid, "%d\n", (int)getpid());
-            errwrap(write(lfd, pid, strlen(pid)));
+            // write pid
+            if(write(lfd, pid, strlen(pid)) == -1) {
+                close(lfd);
+                return LE_SOME;
+            }
+            // and lock type
             switch (l_type) {
                 case L_WR:
-                    if(write(lfd, "w", 1) == -1) {
+                    if(write(lfd, LCKF_WR, 1) == -1) {
                         close(lfd);
                         return LE_SOME;
                     }
                     break;
                 case L_RD:
-                    if(write(lfd, "r", 1) == -1) {
+                    if(write(lfd, LCKF_RD, 1) == -1) {
                         close(lfd);
                         return LE_SOME;
                     }
@@ -95,10 +130,12 @@ int manage_lock(char *file, lock_t l_type, bool acq_lock) {
 
 int main(int argc, char *argv[]) {
     int pid;
+    // text editor, file to edit
     char *editor, *file;
+    // to show blocking error only once
     bool errord = false;
     if(argc != 2) {
-        printf("Usage: %s <file_to edit>", argv[0]);
+        printf("Usage: %s <file_to edit>\n", argv[0]);
         exit(1);
     }
     file = argv[1];
@@ -107,18 +144,21 @@ int main(int argc, char *argv[]) {
             err(ERR_LOCKD, NULL, false);
             errord = true;
         }
+        // wait for lock release
         usleep(1000);
     }
     editor = getenv("EDITOR");
     if(editor == NULL) {
         editor = "nano";
     }
+    // let user edit file
     pid = errwrap(fork());
     if(pid == 0) {
         execlp(editor, editor, file, (char*)NULL);
         exit(-1);
     } else {
         waitpid(pid, NULL, 0);
+        // release lock
         if(manage_lock(file, L_WR, false) != 0) {
             err(ERR_RELEASE, file, false);
         }
