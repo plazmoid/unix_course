@@ -33,8 +33,8 @@ int manage_lock(char *file, lock_t l_type, bool acq_lock) {
     // lock fd, split index
     int lfd, n_idx;
     // path to lockfile, pid read from lockfile
-    // raw buffer to read in, lock char (w/r)
-    char lck_path[512], read_pid[16], buf[64], lc;
+    // raw buffer to read in, lock char (w/r), for tmp vals
+    char lck_path[512], read_pid[16], buf[64], lc, *tmp;
     // pid of the current process
     char pid[16];
     // if file is already locked
@@ -48,22 +48,24 @@ int manage_lock(char *file, lock_t l_type, bool acq_lock) {
         errwrap(read(lfd, buf, 63));
         close(lfd);
         // poor analogue of split
-        n_idx = index(buf, '\n');
-        if(n_idx == NULL) {
+        tmp = strchr(buf, '\n');
+        if(tmp == NULL) {
             err(ERR_FMT, lck_path, true);
         }
+        n_idx = (int)(tmp - buf);
         // read pid from lockfile
         strncpy(read_pid, buf, n_idx);
         // and the type of lock
         lc = buf[n_idx+1];
-        if(lc != LCKF_WR && lc != LCKF_RD) {
+        // check lock type (r/w)
+        if(lc != *(char*)LCKF_WR && lc != *(char*)LCKF_RD) {
             err(ERR_FMT, lck_path, true);
         }
         if(acq_lock) {
             // and we want to lock it again
             // in case of existing exclusive lock
             // fail to lock immediately
-            if(lc == LCKF_WR) {
+            if(lc == *(char*)LCKF_WR) {
                 return LE_LOCKD;
             }
             // if lock is shared
@@ -93,7 +95,7 @@ int manage_lock(char *file, lock_t l_type, bool acq_lock) {
     } else {
         // if want to lock and there are no lockfiles
         if(acq_lock) {
-            lfd = errwrap(open(lck_path, O_CREAT | O_WRONLY));
+            lfd = errwrap(open(lck_path, O_CREAT | O_WRONLY, 0600));
             sprintf(pid, "%d\n", (int)getpid());
             // write pid
             if(write(lfd, pid, strlen(pid)) == -1) {
