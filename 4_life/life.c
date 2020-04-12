@@ -48,6 +48,7 @@ int errwrap(int ret) {
 }
 
 void sock_init() {
+	int port = 31338;
     int opt = 1;
     listen_socket_fd = errwrap(socket(AF_INET, SOCK_STREAM, 0));
     int flags = errwrap(fcntl(listen_socket_fd, F_GETFL));
@@ -56,10 +57,11 @@ void sock_init() {
     errwrap(setsockopt(listen_socket_fd, SOL_SOCKET, SO_REUSEADDR, 
             &opt, sizeof(int)));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(31338);
+    addr.sin_port = htons(port);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     errwrap(bind(listen_socket_fd, (struct sockaddr*)&addr, sizeof(addr)));
     errwrap(listen(listen_socket_fd, 5));
+	fprintf(stderr, "Listening on localhost:%d\n", port);
 }
 
 void client_handler(CellField *cfield) {
@@ -87,6 +89,8 @@ void client_handler(CellField *cfield) {
 void game_of_life(CellField *cfield) {
     // &ActionTuple; array of actions
     ActionTuple *action, *fld_actions;
+	// current cell
+	char cell;
     int fld_actions_len = 0;
     int neighbours = 0;
     // if true, then we can make next life iteration
@@ -104,8 +108,9 @@ void game_of_life(CellField *cfield) {
             for(int y = 0; y < cfield->fy; y++) {
                 // implementing game rules
                 neighbours = count_neighbours(cfield, x, y);
-                if(neighbours == 3 || neighbours == 2) {
-                    if(get_cell(cfield, x, y) == NO_CELL && neighbours == 3) {
+                cell = get_cell(cfield, x, y);
+				if(neighbours == 3 || neighbours == 2) {
+                    if(cell == NO_CELL && neighbours == 3) {
                         // its better to perform all changes after full field scan
                         // so just store them
                         fld_actions[fld_actions_len] = (ActionTuple){
@@ -116,7 +121,7 @@ void game_of_life(CellField *cfield) {
                         fld_actions_len++;
                     }
                 } else {
-                    if(get_cell(cfield, x, y) == CELL) {
+                    if(cell == CELL) {
                         fld_actions[fld_actions_len] = (ActionTuple){
                             .c_action = REMOVE,
                             .fx = x,
